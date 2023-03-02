@@ -9,5 +9,6 @@ edition = "2021"
 clap = { version = "4", features = ["derive"] }
 colored = "2"
 pad = "0.1"
-rand = "0.8.5"
-strum = { version = "0.24.1", features = ["derive"] }
+rand = "0.8"
+strum = { version = "0.24", features = ["derive"] }
+wax = "0.5"

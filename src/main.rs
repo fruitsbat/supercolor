@@ -2,8 +2,13 @@ use clap::{Parser, ValueEnum};
 use colored::*;
 use pad::PadStr;
 use rand::{distributions::WeightedIndex, prelude::*, Rng};
-use std::{fs, include_str};
+use std::{
+    ffi::OsStr,
+    fs,
+    path::{Path, PathBuf},
+};
 use strum::IntoEnumIterator;
+use wax::Glob;
 
 mod builtins;
 
@@ -12,11 +17,31 @@ fn main() {
     let args = Args::parse();
 
     let files = match &args.path {
-        Some(p) => read_path(p),
+        Some(_) => read_path(&args),
         None => vec![],
     };
+
+    if files.len()
+        + if args.no_builtins {
+            0
+        } else {
+            builtins::Builtins::iter().count()
+        }
+        <= 0
+    {
+        println!("nothing to see here...\ncould not find any input files");
+        return;
+    }
+
     let builtin_or_file = [DataType::Builtin, DataType::File];
-    let weights = [builtins::Builtins::iter().count(), files.len()];
+    let weights = [
+        if args.no_builtins {
+            0
+        } else {
+            builtins::Builtins::iter().count()
+        },
+        files.len(),
+    ];
     let dist = WeightedIndex::new(&weights).expect("failed to parse weighted index list!");
 
     let mut rng = rand::thread_rng();
@@ -25,10 +50,14 @@ fn main() {
         DataType::Builtin => builtins::Builtins::iter()
             .choose(&mut rng)
             .unwrap_or(builtins::Builtins::Catpeek)
-            .get(),
-        DataType::File => files.choose(&mut rng).unwrap(),
+            .get()
+            .into(),
+        DataType::File => {
+            fs::read_to_string(files.choose(&mut rng).expect("failed to pick a file"))
+                .expect("failed to read file")
+        }
     };
-    print(data, args);
+    print(data, &args);
 }
 
 enum DataType {
@@ -50,16 +79,34 @@ fn rainbowify<S: Into<String>>(input: S, number: u64) -> ColoredString {
     }
 }
 
-fn read_path(path: &str) -> Vec<String> {
-    match fs::read_dir(path) {
-        Ok(fs) => fs
-            .map(|file| file.unwrap().path().as_os_str().to_str().unwrap().into())
-            .collect::<Vec<String>>(),
-        _ => vec![path.into()],
+fn read_path(args: &Args) -> Vec<PathBuf> {
+    match &args.path {
+        None => vec![],
+        Some(path) => {
+            let entries = PathBuf::from(path);
+            let pathtype = entries
+                .metadata()
+                .expect("this file path seems broken... sorry!");
+            if pathtype.is_file() {
+                return vec![entries];
+            }
+
+            let entries = fs::read_dir(entries)
+                .expect("Failed to read folder!")
+                .filter(|e| e.is_ok())
+                .map(|e| e.unwrap())
+                // filter unreadable paths
+                // folders are not useful to us
+                .filter(|e| e.metadata().is_ok())
+                .filter(|e| e.metadata().unwrap().file_type().is_file())
+                .map(|e| e.path())
+                .collect::<Vec<PathBuf>>();
+            entries
+        }
     }
 }
 
-fn print<S: Into<String>>(input: S, args: Args) {
+fn print<S: Into<String>>(input: S, args: &Args) {
     let rows = args.rows;
     let columns = args.columns;
     let input: String = input.into();
@@ -131,4 +178,7 @@ struct Args {
 
     #[arg(short, long)]
     path: Option<String>,
+
+    #[arg(long, default_value_t = false)]
+    no_builtins: bool,
 }
