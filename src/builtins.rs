@@ -1,20 +1,23 @@
+use clap::ValueEnum;
 use strum::EnumIter;
 
-#[derive(EnumIter, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, EnumIter, PartialOrd, Ord, ValueEnum, Debug)]
 pub enum Builtins {
-    Catpeek,
+    KittyFace,
+    GameBTW,
     LoveMyPuter,
-    Gamebtw,
     Hashbang,
+    Creature,
 }
 
 impl Builtins {
     pub fn get(&self) -> &'static str {
         match self {
-            Builtins::Catpeek => include_str!("art/catpeek.txt"),
-            Builtins::LoveMyPuter => include_str!("art/love_my_puter.txt"),
-            Builtins::Gamebtw => include_str!("art/gamebtw.txt"),
+            Builtins::GameBTW => include_str!("art/gamebtw.txt"),
+            Builtins::KittyFace => include_str!("art/kittyface.txt"),
+            Builtins::LoveMyPuter => include_str!("art/lovemyputer.txt"),
             Builtins::Hashbang => include_str!("art/hashbang.txt"),
+            Builtins::Creature => include_str!("art/creature.txt"),
         }
     }
 }

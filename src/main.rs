@@ -2,56 +2,56 @@ use clap::{Parser, ValueEnum};
 use colored::*;
 use pad::PadStr;
 use rand::{distributions::WeightedIndex, prelude::*, Rng};
-use std::{
-    ffi::OsStr,
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::PathBuf};
 use strum::IntoEnumIterator;
-use wax::Glob;
 
 mod builtins;
 
 // test the example with `cargo run --example most_simple`
 fn main() {
     let args = Args::parse();
+    let files = read_path(&args);
 
-    let files = match &args.path {
-        Some(_) => read_path(&args),
-        None => vec![],
+    let builtin_count = if args.no_builtins {
+        0
+    } else {
+        if args.builtins.is_empty() {
+            builtins::Builtins::iter().count()
+        } else {
+            args.builtins.len()
+        }
     };
 
-    if files.len()
-        + if args.no_builtins {
-            0
-        } else {
-            builtins::Builtins::iter().count()
-        }
-        <= 0
-    {
+    if files.len() + if args.no_builtins { 0 } else { builtin_count } <= 0 {
         println!("nothing to see here...\ncould not find any input files");
         return;
     }
 
+    // weighting
     let builtin_or_file = [DataType::Builtin, DataType::File];
-    let weights = [
-        if args.no_builtins {
-            0
-        } else {
-            builtins::Builtins::iter().count()
-        },
-        files.len(),
-    ];
+    let weights = [builtin_count, files.len()];
     let dist = WeightedIndex::new(&weights).expect("failed to parse weighted index list!");
 
     let mut rng = rand::thread_rng();
     let builtin_or_file = &builtin_or_file[dist.sample(&mut rng)];
     let data = match builtin_or_file {
-        DataType::Builtin => builtins::Builtins::iter()
-            .choose(&mut rng)
-            .unwrap_or(builtins::Builtins::Catpeek)
-            .get()
-            .into(),
+        DataType::Builtin => {
+            if args.builtins.is_empty() {
+                // we pick from all of the builtins!
+                builtins::Builtins::iter()
+                    .choose(&mut rng)
+                    .unwrap_or(builtins::Builtins::KittyFace)
+                    .get()
+                    .into()
+            } else {
+                // we pick from a specified list of builtins
+                args.builtins
+                    .choose(&mut rng)
+                    .unwrap_or(&builtins::Builtins::KittyFace)
+                    .get()
+                    .into()
+            }
+        }
         DataType::File => {
             fs::read_to_string(files.choose(&mut rng).expect("failed to pick a file"))
                 .expect("failed to read file")
@@ -80,30 +80,30 @@ fn rainbowify<S: Into<String>>(input: S, number: u64) -> ColoredString {
 }
 
 fn read_path(args: &Args) -> Vec<PathBuf> {
-    match &args.path {
-        None => vec![],
-        Some(path) => {
-            let entries = PathBuf::from(path);
-            let pathtype = entries
-                .metadata()
-                .expect("this file path seems broken... sorry!");
-            if pathtype.is_file() {
-                return vec![entries];
-            }
-
-            let entries = fs::read_dir(entries)
-                .expect("Failed to read folder!")
-                .filter(|e| e.is_ok())
-                .map(|e| e.unwrap())
-                // filter unreadable paths
-                // folders are not useful to us
-                .filter(|e| e.metadata().is_ok())
-                .filter(|e| e.metadata().unwrap().file_type().is_file())
-                .map(|e| e.path())
-                .collect::<Vec<PathBuf>>();
-            entries
+    let mut bufs = vec![];
+    for path in &args.paths {
+        let entries = PathBuf::from(path);
+        let pathtype = entries
+            .metadata()
+            .expect(&format!("{} seems to be broken, sorry!", &path));
+        if pathtype.is_file() {
+            bufs.push(entries);
+            continue;
         }
+
+        let mut entries = fs::read_dir(entries)
+            .expect("Failed to read folder!")
+            .filter(|e| e.is_ok())
+            .map(|e| e.unwrap())
+            // filter unreadable paths
+            // folders are not useful to us
+            .filter(|e| e.metadata().is_ok())
+            .filter(|e| e.metadata().unwrap().file_type().is_file())
+            .map(|e| e.path())
+            .collect::<Vec<PathBuf>>();
+        bufs.append(&mut entries)
     }
+    bufs
 }
 
 fn print<S: Into<String>>(input: S, args: &Args) {
@@ -176,9 +176,18 @@ struct Args {
     #[arg(long)]
     color_offset: Option<u8>,
 
-    #[arg(short, long)]
-    path: Option<String>,
+    /// add a folder or file to the set of ascii art
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    paths: Vec<String>,
 
+    /**
+    don't use built in art
+    overrides the builtins option
+    */
     #[arg(long, default_value_t = false)]
     no_builtins: bool,
+
+    /// pick specific builtins you want to add to the set
+    #[arg(long, value_parser, num_args = 1.., value_delimiter = ' ')]
+    builtins: Vec<builtins::Builtins>,
 }
