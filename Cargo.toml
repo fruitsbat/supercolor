@@ -11,4 +11,3 @@ colored = "2"
 pad = "0.1"
 rand = "0.8"
 strum = { version = "0.24", features = ["derive"] }
-wax = "0.5"
