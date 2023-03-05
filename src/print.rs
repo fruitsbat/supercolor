@@ -61,7 +61,9 @@ pub fn print<S: Into<String>>(input: S, args: &crate::Args) {
             linecount += 1;
             for column in 0..columns {
                 let color = (match colormode {
-                    ColorMode::Solid => column.wrapping_add(row).wrapping_add(offset) as u64,
+                    ColorMode::Solid => {
+                        column.wrapping_add(row * columns).wrapping_add(offset) as u64
+                    }
                     ColorMode::Uniform => offset as u64,
                     ColorMode::Rainbow => linecount.wrapping_add(offset as u64) as u64,
                     ColorMode::Trans => match column.rem_euclid(5) {
